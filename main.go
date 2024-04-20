@@ -37,6 +37,23 @@ func main() {
         log.Fatal(err)
     }
 
+	corsMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	http.Handle("/", corsMiddleware(http.DefaultServeMux))
+
 	http.HandleFunc("/getdata", func(w http.ResponseWriter, r *http.Request) {
 		rows, err := db.Query("SELECT id, username, avatar FROM users")
 		if err != nil {
