@@ -56,10 +56,18 @@ func main() {
 	http.Handle("/", corsMiddleware(http.DefaultServeMux))
 
 	http.HandleFunc("/getdata", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		endpoints.GetData(w, r, db)
 	})
 
 	http.HandleFunc("/insertdata", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		endpoints.InsertData(w, r, db)
 	})
 
