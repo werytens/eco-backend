@@ -3,7 +3,11 @@ package endpoints
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
 
 type User struct {
@@ -15,9 +19,56 @@ type User struct {
 type Answer struct {
 	IsOk    bool   `json:"isOk"`
 	Message string `json:"message"`
+	Token   string `json:"token"` 
 }
 
-func GetData(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+var secretKey = []byte("secret")
+
+func Login(w http.ResponseWriter, r *http.Request, db *sql.DB, token string) {
+	parsedToken, errJwt := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+        return secretKey, nil
+    })
+
+    if errJwt != nil {
+        return
+    }
+	
+	 if !parsedToken.Valid {
+        http.Error(w, "Invalid token", http.StatusUnauthorized)
+        return
+    }
+
+    claims, ok := parsedToken.Claims.(jwt.MapClaims)
+    if !ok {
+        http.Error(w, "Failed to parse token claims", http.StatusInternalServerError)
+        return
+    }
+
+    username, ok := claims["username"].(string)
+    if !ok {
+        http.Error(w, "Username not found in token claims", http.StatusInternalServerError)
+        return
+    }
+
+	row := db.QueryRow("SELECT id, username, avatar FROM users WHERE username = $1", username)
+
+	var user User
+
+	err := row.Scan(&user.ID, &user.Username, &user.Avatar)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func GetUsers(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	rows, err := db.Query("SELECT id, username, avatar FROM users")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -42,7 +93,7 @@ func GetData(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	json.NewEncoder(w).Encode(users)
 }
 
-func InsertData(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+func Registration(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	var user User
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&user)
@@ -51,7 +102,18 @@ func InsertData(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		return
 	}
 
-	var result = Answer{IsOk: true, Message: "success"}
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["username"] = user.Username
+	claims["exp"] = time.Now().Add(time.Hour * 729).Unix()
+	tokenString, err := token.SignedString(secretKey)
+
+    if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+	var result = Answer{IsOk: true, Message: "success", Token: tokenString}
 
 	var avatar *string
 	if user.Avatar != nil {

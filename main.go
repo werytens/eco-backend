@@ -55,20 +55,31 @@ func main() {
 
 	http.Handle("/", corsMiddleware(http.DefaultServeMux))
 
-	http.HandleFunc("/getdata", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/users/get", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		endpoints.GetData(w, r, db)
+		endpoints.GetUsers(w, r, db)
 	})
 
-	http.HandleFunc("/insertdata", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/users/registration", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		endpoints.InsertData(w, r, db)
+		endpoints.Registration(w, r, db)
+	})
+
+	http.HandleFunc("/users/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var authHeader string = r.Header.Get("Authorization")
+
+		endpoints.Login(w, r, db, authHeader)
 	})
 
 	fmt.Println("Server listening on http://localhost:8080")
