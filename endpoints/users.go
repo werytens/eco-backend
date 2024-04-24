@@ -3,16 +3,17 @@ package endpoints
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
 	ID       int     `json:"id"`
 	Username string  `json:"username"`
+	Password string `json:"password"`
 	Avatar   *string `json:"avatar,omitempty"`
 }
 
@@ -33,7 +34,7 @@ func Login(w http.ResponseWriter, r *http.Request, db *sql.DB, token string) {
         return
     }
 	
-	 if !parsedToken.Valid {
+	if !parsedToken.Valid {
         http.Error(w, "Invalid token", http.StatusUnauthorized)
         return
     }
@@ -119,7 +120,15 @@ func Registration(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	if user.Avatar != nil {
 		avatar = user.Avatar
 	}
-	_, err = db.Exec("INSERT INTO users (username, avatar) VALUES ($1, $2)", user.Username, avatar)
+
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec("INSERT INTO users (username, password, avatar) VALUES ($1, $2, $3)", user.Username, hashedPassword, avatar)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
