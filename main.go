@@ -72,6 +72,14 @@ func main() {
 	})
 
 	http.HandleFunc("/users/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		endpoints.Login(w, r, db)
+	})
+
+	http.HandleFunc("/users/me", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -79,7 +87,7 @@ func main() {
 
 		var authHeader string = r.Header.Get("Authorization")
 
-		endpoints.Login(w, r, db, authHeader)
+		endpoints.Me(w, r, db, authHeader)
 	})
 
 	fmt.Println("Server listening on http://localhost:8080")

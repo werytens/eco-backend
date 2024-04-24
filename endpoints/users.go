@@ -13,43 +13,80 @@ import (
 type User struct {
 	ID       int     `json:"id"`
 	Username string  `json:"username"`
-	Password string `json:"password"`
+	Password string  `json:"password"`
 	Avatar   *string `json:"avatar,omitempty"`
 }
 
 type Answer struct {
 	IsOk    bool   `json:"isOk"`
 	Message string `json:"message"`
-	Token   string `json:"token"` 
+	Token   string `json:"token"`
 }
 
 var secretKey = []byte("secret")
 
-func Login(w http.ResponseWriter, r *http.Request, db *sql.DB, token string) {
+func Login(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	var user User
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&user)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var storedPassword string
+	row := db.QueryRow("SELECT id, username, avatar, password FROM users WHERE username = $1", user.Username)
+
+	err = row.Scan(&user.ID, &user.Username, &user.Avatar, &storedPassword)
+	if err == sql.ErrNoRows {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(storedPassword), []byte(user.Password))
+	if err != nil {
+		http.Error(w, "Incorrect password", http.StatusUnauthorized)
+		return
+	}
+
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["username"] = user.Username
+	claims["exp"] = time.Now().Add(time.Hour * 729).Unix()
+	tokenString, err := token.SignedString(secretKey)
+	var result = Answer{IsOk: true, Message: "success", Token: tokenString}
+
+	json.NewEncoder(w).Encode(result)
+}
+
+func Me(w http.ResponseWriter, r *http.Request, db *sql.DB, token string) {
 	parsedToken, errJwt := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-        return secretKey, nil
-    })
+		return secretKey, nil
+	})
 
-    if errJwt != nil {
-        return
-    }
-	
+	if errJwt != nil {
+		return
+	}
+
 	if !parsedToken.Valid {
-        http.Error(w, "Invalid token", http.StatusUnauthorized)
-        return
-    }
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
 
-    claims, ok := parsedToken.Claims.(jwt.MapClaims)
-    if !ok {
-        http.Error(w, "Failed to parse token claims", http.StatusInternalServerError)
-        return
-    }
+	claims, ok := parsedToken.Claims.(jwt.MapClaims)
+	if !ok {
+		http.Error(w, "Failed to parse token claims", http.StatusInternalServerError)
+		return
+	}
 
-    username, ok := claims["username"].(string)
-    if !ok {
-        http.Error(w, "Username not found in token claims", http.StatusInternalServerError)
-        return
-    }
+	username, ok := claims["username"].(string)
+	if !ok {
+		http.Error(w, "Username not found in token claims", http.StatusInternalServerError)
+		return
+	}
 
 	row := db.QueryRow("SELECT id, username, avatar FROM users WHERE username = $1", username)
 
@@ -109,10 +146,10 @@ func Registration(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	claims["exp"] = time.Now().Add(time.Hour * 729).Unix()
 	tokenString, err := token.SignedString(secretKey)
 
-    if err != nil {
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
+		return
+	}
 
 	var result = Answer{IsOk: true, Message: "success", Token: tokenString}
 
@@ -120,7 +157,6 @@ func Registration(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	if user.Avatar != nil {
 		avatar = user.Avatar
 	}
-
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
