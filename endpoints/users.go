@@ -57,6 +57,12 @@ func Login(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	claims["username"] = user.Username
 	claims["exp"] = time.Now().Add(time.Hour * 729).Unix()
 	tokenString, err := token.SignedString(secretKey)
+	
+	if err != nil {
+		http.Error(w, "Incorrect password", http.StatusUnauthorized)
+		return
+	}
+
 	var result = Answer{IsOk: true, Message: "success", Token: tokenString}
 
 	json.NewEncoder(w).Encode(result)
